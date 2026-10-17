@@ -7,7 +7,8 @@ from python_tsp.distances import euclidean_distance_matrix
 with open("held_karp_results.csv", "w", newline="") as f:
     writer = csv.writer(f)
     writer.writerow(["n", "seconds", "distance"])
-    for n in range(4, 24):
+    n = 2
+    while True:
 
 
         rng = np.random.default_rng(2026)                # fixed seed
@@ -28,6 +29,13 @@ with open("held_karp_results.csv", "w", newline="") as f:
         print("Time taken:")
         print(f">>> {elapsedTime:.6f} seconds")
         print("-------------------------")
+
+        if elapsedTime > 600:
+            print(f"Computation that took longer that 600 seconds (10minutes) has been found. ({n, distance})")
+            break
+        else:
+            n= n+1
+
 
 
 

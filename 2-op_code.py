@@ -15,24 +15,23 @@ with open("two_opt_results.csv", "w", newline="") as f:
         d = euclidean_distance_matrix(cities)            # 10 x 10 distances
         startTime = time.time()
 
-        permutation, distance = solve_tsp_local_search(d, x0=cities)
+        permutation, distance = solve_tsp_local_search(d)
 
         elapsedTime = time.time() - startTime
 
         writer.writerow([n, elapsedTime, distance])    # one row per n
         f.flush()                                      # save it now
         
-        print(f"Round {n} has been completed!")
-        print("Ideal permutation and distance")
-        print(f">>> {permutation}, {distance:.2f}")
-        print("Time taken:")
-        print(f">>> {elapsedTime:.6f} seconds")
+        print(f"Trip with {n} cities has been completed!")
+        print(f">>> Distance: {distance:.2f}")
+        print(f">>> Time taken: {elapsedTime:.6f} seconds")
         print("-------------------------")
 
         if elapsedTime > 600:
+            print(f"Computation that took longer that 600 seconds (10minutes) has been found. ({n, distance})")
             break
         else:
-            n+1
+            n= n*2
             
 
 
