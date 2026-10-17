@@ -5,7 +5,7 @@ import csv
 from python_tsp.distances import euclidean_distance_matrix
 from networkx.algorithms.approximation import greedy_tsp
 
-with open("greedy_code.csv", "w", newline="") as f:
+with open("greedy_code2.csv", "w", newline="") as f:
     writer = csv.writer(f)
     writer.writerow(["n", "seconds", "distance"])
 
@@ -26,7 +26,7 @@ with open("greedy_code.csv", "w", newline="") as f:
         elapsedTime = time.time() - startTime
         
         distance = sum(d[a][b] for a, b in zip(tour, tour[1:]))
-        writer.writerow([n, elapsedTime, distance])    # one row per n
+        writer.writerow([n, elapsedTime, distance, tour])    # one row per n
         f.flush()                                      # save it now
         
         print(f"Trip with {n} cities has been completed!")

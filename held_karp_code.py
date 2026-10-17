@@ -4,7 +4,7 @@ import csv
 from python_tsp.exact import solve_tsp_dynamic_programming
 from python_tsp.distances import euclidean_distance_matrix
 
-with open("held_karp_results.csv", "w", newline="") as f:
+with open("held_karp_results2.csv", "w", newline="") as f:
     writer = csv.writer(f)
     writer.writerow(["n", "seconds", "distance"])
     n = 2
@@ -20,7 +20,7 @@ with open("held_karp_results.csv", "w", newline="") as f:
 
         elapsedTime = time.time() - startTime
 
-        writer.writerow([n, elapsedTime, distance])    # one row per n
+        writer.writerow([n, elapsedTime, distance, permutation])    # one row per n
         f.flush()                                      # save it now
         
         print(f"Round {n} has been completed!")
