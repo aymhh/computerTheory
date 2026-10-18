@@ -38,7 +38,7 @@ with open("greedy_code2.csv", "w", newline="") as f:
             print(f"Computation that took longer that 600 seconds (10minutes) has been found. ({n, distance})")
             break
         else:
-            n= n*2
+            n= n*n
 
 
 

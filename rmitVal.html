@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Two-ant study — highway, destruction, bridge</title>
+<style>
+  body{margin:0;background:#0f1113;color:#e9ecef;font:14px/1.55 system-ui,sans-serif;padding:20px;
+       display:flex;flex-direction:column;align-items:center}
+  h1{font:600 19px/1.3 system-ui;margin:0 0 2px}
+  .sub{color:#8b949e;font-size:13px;margin-bottom:12px;max-width:940px;text-align:center}
+  .row{display:flex;gap:11px;align-items:center;flex-wrap:wrap;justify-content:center;margin:8px 0}
+  button,select{background:#21262d;color:#e9ecef;border:1px solid #30363d;border-radius:5px;
+                padding:6px 12px;cursor:pointer;font:inherit}
+  button.go{background:#2f6f3e;border-color:#3f9a54}
+  button:disabled{opacity:.4;cursor:default}
+  label{display:flex;gap:6px;align-items:center;font-size:13px}
+  .quad{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;width:940px}
+  .cell{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px}
+  .cell h2{margin:0 0 2px;font:600 13px/1.3 system-ui}
+  .cell .tag{font:11px ui-monospace,monospace;color:#8b949e;margin-bottom:7px}
+  .cell canvas{width:100%;display:block;background:#fff;border-radius:3px;image-rendering:pixelated}
+  .st{font:11.5px/1.5 ui-monospace,monospace;color:#8b949e;margin-top:7px}
+  .st b{color:#e9ecef;font-weight:600}
+  .A{color:#58a6ff}.B{color:#ffa657}
+  .ok{color:#4ec46a}.warn{color:#e3b341}.bad{color:#f1707b}.dim{color:#6e7681}
+  .panel{width:940px;background:#161b22;border:1px solid #30363d;border-radius:6px;
+         padding:12px 15px;margin-top:12px}
+  .panel h3{margin:0 0 9px;font:600 11px/1 system-ui;letter-spacing:.5px;
+            text-transform:uppercase;color:#8b949e}
+  table{width:100%;border-collapse:collapse;font:12.5px ui-monospace,monospace}
+  th{text-align:right;color:#8b949e;font:600 10.5px system-ui;letter-spacing:.3px;
+     text-transform:uppercase;padding:5px 7px;border-bottom:1px solid #30363d;vertical-align:bottom}
+  th:first-child,td:first-child{text-align:left}
+  td{text-align:right;padding:4px 7px;border-bottom:1px solid #1d2227;font-variant-numeric:tabular-nums}
+  tfoot td{border-bottom:none;border-top:1px solid #30363d;font-weight:600}
+  #prog{height:6px;background:#21262d;border-radius:3px;overflow:hidden;width:940px;margin-top:10px}
+  #prog i{display:block;height:100%;background:#3f9a54;width:0}
+  #verdict{font:600 14px/1.55 system-ui;padding:4px 0 8px}
+  pre{font:11px/1.25 ui-monospace,monospace;color:#8b949e;margin:0;white-space:pre;overflow-x:auto}
+  .note{font-size:12.5px;color:#8b949e;margin-top:9px}
+</style>
+</head>
+<body>
+<h1>Two Langton's ants — highway formation, destruction, and bridges</h1>
+<div class="sub">Shared single-bit grid · sequential update (A then B) · ant A fixed facing north ·
+relative heading of B is the only variable</div>
+
+<!-- ===================== LIVE ===================== -->
+<div class="row">
+  <label>Separation Δ(B−A)
+    <select id="sep">
+      <option value="20,0" selected>(+20, 0) — B east of A</option>
+      <option value="40,0">(+40, 0)</option>
+      <option value="8,0">(+8, 0) — close</option>
+      <option value="14,14">(+14, +14) — diagonal</option>
+      <option value="0,20">(0, +20) — B north of A</option>
+      <option value="60,0">(+60, 0) — far</option>
+    </select>
+  </label>
+  <button id="start" class="go">▶ Start all four</button>
+  <button id="pause" disabled>Pause</button>
+  <button id="reset">Reset to setup</button>
+  <label>Speed <input id="speed" type="range" min="1" max="3000" value="600"></label>
+  <label><input id="auto" type="checkbox" checked> stop when settled</label>
+  <button id="png">Save 2×2 PNG</button>
+</div>
+
+<div class="quad" id="quad"></div>
+
+<div class="panel">
+  <h3>Live — the three measures</h3>
+  <table id="tl"><thead><tr>
+    <th>Class</th><th>step</th><th class="A">A highway</th><th class="B">B highway</th>
+    <th>destroyed</th><th>bridge</th>
+  </tr></thead><tbody></tbody></table>
+  <div class="note">Rings on the grids: solid with arrow = start position and heading ·
+  dashed = highway onset · red = first contact · green = bridge.</div>
+</div>
+
+<!-- ===================== BATCH ===================== -->
+<div class="row" style="margin-top:18px">
+  <label>Separations per class <select id="per">
+    <option>200</option><option selected>600</option><option>1500</option></select></label>
+  <label>Separation range <select id="rng">
+    <option value="20">±20 cells</option><option value="40" selected>±40</option>
+    <option value="60">±60</option></select></label>
+  <label>Step cap <select id="cap">
+    <option value="60000">60k</option><option value="120000" selected>120k</option>
+    <option value="300000">300k</option></select></label>
+  <button id="run" class="go">▶ Run batch study</button>
+  <button id="csv" disabled>⤓ Export CSV</button>
+</div>
+<div id="prog"><i></i></div>
+
+<div class="panel">
+  <h3>Control — single ant, blank grid</h3>
+  <table id="tc"><thead><tr><th>Start heading</th><th>highway onset</th>
+    <th>drift / cycle</th><th>deviation from baseline</th></tr></thead><tbody></tbody></table>
+  <div class="note" id="nc"></div>
+</div>
+
+<div class="panel">
+  <div id="verdict" class="dim">batch not run yet</div>
+  <h3>1 — Does a highway form?</h3>
+  <table id="t1"><thead><tr>
+    <th>Class</th><th>n</th><th>runs with a highway</th><th>both ants</th>
+    <th>earliest</th><th>median</th><th>latest</th></tr></thead><tbody></tbody><tfoot></tfoot></table>
+  <div class="note" id="n1"></div>
+</div>
+
+<div class="panel">
+  <h3>2 — Does a highway get destroyed?</h3>
+  <table id="t2"><thead><tr>
+    <th>Class</th><th>runs with ≥1 destruction</th><th>destructions (med · max)</th>
+    <th>destroyed and never regained</th></tr></thead><tbody></tbody><tfoot></tfoot></table>
+  <div class="note" id="n2"></div>
+</div>
+
+<div class="panel">
+  <h3>3 — Does a bridge form, and when?</h3>
+  <table id="t3"><thead><tr>
+    <th>Class</th><th>bridges</th><th>rate</th>
+    <th>earliest</th><th>median</th><th>latest</th></tr></thead><tbody></tbody><tfoot></tfoot></table>
+  <div class="note" id="n3"></div>
+</div>
+
+<div class="panel">
+  <h3>Highway onset distribution — pooled</h3>
+  <pre id="hist" class="dim">—</pre>
+</div>
+
+<script>
+/* ===================== shared ===================== */
+const DX=[0,1,0,-1], DY=[-1,0,1,0];
+const HN=['north ↑','east →','south ↓','west ←'];
+const CLS=[
+  {r:0,key:'r=0',name:'parallel, same heading'},
+  {r:1,key:'r=1',name:'B 90° clockwise of A'},
+  {r:2,key:'r=2',name:'opposed, 180°'},
+  {r:3,key:'r=3',name:'B 90° anticlockwise of A'}
+];
+const g=id=>document.getElementById(id);
+const srt=v=>v.slice().sort((a,b)=>a-b);
+const med=v=>{const n=v.length; if(!n) return NaN; const w=srt(v);
+              return n%2?w[n>>1]:(w[n/2-1]+w[n/2])/2;};
+const f=n=>Number.isFinite(n)?(Number.isInteger(n)?n.toLocaleString():n.toFixed(1)):'—';
+const pc=(a,b)=>b?(a/b*100).toFixed(1)+'%':'—';
+
+/* ===================== LIVE PANELS ===================== */
+(function(){
+const N=401, C=200, GRACE=6000;
+const quad=g('quad'), panels=[];
+
+CLS.forEach(cl=>{
+  const box=document.createElement('div'); box.className='cell';
+  box.innerHTML=`<h2>${cl.name}</h2><div class="tag" id="tag${cl.r}"></div>`;
+  const cvs=document.createElement('canvas'); cvs.width=cvs.height=N;
+  const st=document.createElement('div'); st.className='st'; st.id='st'+cl.r;
+  box.append(cvs,st); quad.append(box);
+  panels.push({cl,cvs,ctx:cvs.getContext('2d')});
+});
+
+function mkAnt(x,y,d,id){
+  return {x,y,d,id,hw:0,ever:0,run:0,px:0,py:0,lost:0,
+          hist:new Int16Array(512),onsetPt:null};
+}
+function setup(p){
+  const [sx,sy]=g('sep').value.split(',').map(Number);
+  p.g=new Uint8Array(N*N);
+  p.origins=[{x:C,y:C,d:0},{x:C+sx,y:C+sy,d:p.cl.r&3}];
+  p.ants=p.origins.map((o,i)=>mkAnt(o.x,o.y,o.d,i));
+  p.steps=0; p.contact=0; p.destr=0; p.bridge=0;
+  p.contactPt=null; p.bridgePt=null; p.bothAt=0; p.settled=false; p.dead=false;
+  p.img=p.ctx.createImageData(N,N); p.img.data.fill(255);
+  g('tag'+p.cl.r).textContent=
+    `${p.cl.key} · A ${HN[0]} · B ${HN[p.cl.r&3]} · Δ(${sx>0?'+':''}${sx}, ${-sy>0?'+':''}${-sy})`;
+}
+function paint(p,i,r,gg,b){const o=i*4;p.img.data[o]=r;p.img.data[o+1]=gg;p.img.data[o+2]=b;}
+
+function step(p){
+  for(const a of p.ants){
+    const i=a.y*N+a.x, v=p.g[i];
+    if(v===0){
+      a.d=(a.d+1)&3; p.g[i]=a.id+1;
+      if(a.id) paint(p,i,217,131,36); else paint(p,i,47,111,176);
+    } else {
+      a.d=(a.d+3)&3; p.g[i]=0; paint(p,i,255,255,255);
+      if(v!==a.id+1){
+        if(!p.contact){ p.contact=p.steps+1; p.contactPt={x:a.x,y:a.y}; }
+        if(a.hw&&!p.bridge){ p.bridge=p.steps+1; p.bridgePt={x:a.x,y:a.y}; }
+      }
+    }
+    a.x+=DX[a.d]; a.y+=DY[a.d];
+    if(a.x<3||a.y<3||a.x>N-4||a.y>N-4){ p.dead=true; return; }
+  }
+  p.steps++;
+  const s=p.steps, k=(s&255)*2;
+  for(const a of p.ants){
+    a.hist[k]=a.x; a.hist[k+1]=a.y;
+    if(s>104){
+      const q=((s-104)&255)*2, u=a.x-a.hist[q], w=a.y-a.hist[q+1];
+      if((u===2||u===-2)&&(w===2||w===-2)){
+        if(u===a.px&&w===a.py) a.run++; else {a.px=u;a.py=w;a.run=1;}
+      } else a.run=0;
+      if(!a.hw&&a.run>=208){ a.hw=s-a.run-103; a.ever=1; a.onsetPt={x:a.x,y:a.y}; }
+      else if(a.hw&&a.run===0){ p.destr++; a.hw=0; }
+    }
+  }
+  const [A,B]=p.ants;
+  if(A.hw&&B.hw){ if(!p.bothAt) p.bothAt=s; } else p.bothAt=0;
+  if(p.bothAt && s>p.bothAt+GRACE) p.settled=true;
+}
+
+function arrow(ctx,x,y,d,col){
+  const L=13,hx=DX[d],hy=DY[d];
+  ctx.strokeStyle=col; ctx.lineWidth=2; ctx.beginPath();
+  ctx.moveTo(x,y); ctx.lineTo(x+hx*L,y+hy*L); ctx.stroke();
+  const tx=x+hx*L,ty=y+hy*L,sz=4.5;
+  ctx.fillStyle=col; ctx.beginPath();
+  ctx.moveTo(tx+hx*sz,ty+hy*sz);
+  ctx.lineTo(tx-hy*sz*.8-hx*sz*.2,ty+hx*sz*.8-hy*sz*.2);
+  ctx.lineTo(tx+hy*sz*.8-hx*sz*.2,ty-hx*sz*.8-hy*sz*.2);
+  ctx.closePath(); ctx.fill();
+}
+function draw(p){
+  const ctx=p.ctx;
+  ctx.putImageData(p.img,0,0);
+  p.origins.forEach((o,i)=>{
+    const col=i?'#b35309':'#0b4a8f';
+    ctx.strokeStyle=col; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(o.x+.5,o.y+.5,6,0,7); ctx.stroke();
+    arrow(ctx,o.x+.5,o.y+.5,o.d,col);
+  });
+  if(!p.steps){
+    ctx.strokeStyle='#9aa4ae'; ctx.setLineDash([3,3]); ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(p.origins[0].x+.5,p.origins[0].y+.5);
+    ctx.lineTo(p.origins[1].x+.5,p.origins[1].y+.5); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='#555'; ctx.font='11px system-ui';
+    ctx.fillText('setup — press Start',8,14);
+  }
+  if(p.contactPt){ ctx.strokeStyle='#d14'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(p.contactPt.x+.5,p.contactPt.y+.5,5,0,7); ctx.stroke(); }
+  if(p.bridgePt){ ctx.strokeStyle='#2a9d3f'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(p.bridgePt.x+.5,p.bridgePt.y+.5,8,0,7); ctx.stroke(); }
+  p.ants.forEach(a=>{
+    if(a.onsetPt){ ctx.strokeStyle=a.id?'#b35309':'#0b4a8f'; ctx.lineWidth=1;
+      ctx.setLineDash([2,2]);
+      ctx.beginPath(); ctx.arc(a.onsetPt.x+.5,a.onsetPt.y+.5,4,0,7); ctx.stroke();
+      ctx.setLineDash([]); }
+    ctx.fillStyle=a.id?'#ff8c00':'#1565c0';
+    ctx.fillRect(a.x-1,a.y-1,3,3);
+  });
+}
+function antTxt(a){
+  if(a.hw) return 'HW @ <b>'+a.hw.toLocaleString()+'</b>';
+  return a.ever ? '<span class="bad">lost</span>' : 'chaotic';
+}
+function stat(p){
+  const [A,B]=p.ants;
+  g('st'+p.cl.r).innerHTML=
+    `step <b>${p.steps.toLocaleString()}</b>`+
+    (p.settled?' · <span class="ok">settled</span>':p.dead?' · <span class="warn">off grid</span>':'')+
+    `<br><span class="A">A</span> ${antTxt(A)} · <span class="B">B</span> ${antTxt(B)}`+
+    `<br>destroyed <b class="${p.destr?'bad':''}">${p.destr}</b> · `+
+    `bridge ${p.bridge?'<b class="ok">'+p.bridge.toLocaleString()+'</b>':'—'}`;
+}
+function table(){
+  g('tl').tBodies[0].innerHTML=panels.map(p=>{
+    const [A,B]=p.ants;
+    return `<tr><td>${p.cl.key} · ${p.cl.name}</td><td>${p.steps.toLocaleString()}</td>
+      <td>${A.hw?A.hw.toLocaleString():(A.ever?'lost':'—')}</td>
+      <td>${B.hw?B.hw.toLocaleString():(B.ever?'lost':'—')}</td>
+      <td class="${p.destr?'bad':''}">${p.destr}</td>
+      <td class="${p.bridge?'ok':'dim'}">${p.bridge?p.bridge.toLocaleString():'—'}</td></tr>`;
+  }).join('');
+}
+
+let running=false;
+function resetAll(){
+  running=false; panels.forEach(setup);
+  g('start').disabled=false; g('pause').disabled=true; g('pause').textContent='Pause';
+  panels.forEach(p=>{draw(p);stat(p);}); table();
+}
+function tick(){
+  if(running){
+    const n=+g('speed').value, stop=g('auto').checked;
+    panels.forEach(p=>{
+      if(p.dead||(stop&&p.settled)) return;
+      for(let k=0;k<n;k++){ step(p); if(p.dead||(stop&&p.settled)) break; }
+    });
+    if(panels.every(p=>p.dead||(g('auto').checked&&p.settled))){
+      running=false; g('pause').textContent='Play';
+    }
+  }
+  panels.forEach(p=>{draw(p);stat(p);}); table();
+  requestAnimationFrame(tick);
+}
+g('start').onclick=()=>{running=true;g('start').disabled=true;g('pause').disabled=false;
+                        g('pause').textContent='Pause';};
+g('pause').onclick=e=>{running=!running;e.target.textContent=running?'Pause':'Play';};
+g('reset').onclick=resetAll;
+g('sep').onchange=resetAll;
+g('png').onclick=()=>{
+  const o=document.createElement('canvas'); o.width=o.height=N*2+12;
+  const c=o.getContext('2d'); c.fillStyle='#0f1113'; c.fillRect(0,0,o.width,o.height);
+  panels.forEach((p,i)=>c.drawImage(p.cvs,(i%2)*(N+12),((i/2)|0)*(N+12)));
+  const a=document.createElement('a'); a.download='four-classes-live.png'; a.href=o.toDataURL(); a.click();
+};
+resetAll(); tick();
+})();
+
+/* ===================== HEADLESS BATCH ===================== */
+(function(){
+const N=801, C=400, MAXCAP=300000;
+const G=new Uint8Array(N*N), T=new Int32Array(MAXCAP*2+64);
+const ax=new Int16Array(256), ay=new Int16Array(256),
+      bx=new Int16Array(256), by=new Int16Array(256);
+let LAST=[];
+
+function runPair(dx,dy,r,CAP,GRACE){
+  let t=0;
+  let x0=C,y0=C,d0=0, x1=C+dx,y1=C+dy,d1=r&3;
+  let run0=0,p0x=0,p0y=0,hw0=0,ever0=0;
+  let run1=0,p1x=0,p1y=0,hw1=0,ever1=0;
+  let first=0,contact=0,destr=0,bridge=0,bothAt=0,edge=0,s=0;
+
+  for(s=1;s<=CAP;s++){
+    /* ant A */
+    let i=y0*N+x0, v=G[i];
+    if(v===0){ d0=(d0+1)&3; G[i]=1; T[t++]=i; }
+    else{ d0=(d0+3)&3; G[i]=0; T[t++]=i;
+          if(v===2){ if(!contact) contact=s; if(hw0&&!bridge) bridge=s; } }
+    x0+=DX[d0]; y0+=DY[d0];
+    if(x0<3||y0<3||x0>N-4||y0>N-4){ edge=1; break; }
+
+    /* ant B */
+    i=y1*N+x1; v=G[i];
+    if(v===0){ d1=(d1+1)&3; G[i]=2; T[t++]=i; }
+    else{ d1=(d1+3)&3; G[i]=0; T[t++]=i;
+          if(v===1){ if(!contact) contact=s; if(hw1&&!bridge) bridge=s; } }
+    x1+=DX[d1]; y1+=DY[d1];
+    if(x1<3||y1<3||x1>N-4||y1>N-4){ edge=1; break; }
+
+    /* highway detection */
+    const k=s&255; ax[k]=x0; ay[k]=y0; bx[k]=x1; by[k]=y1;
+    if(s>104){
+      const q=(s-104)&255;
+      let u=x0-ax[q], w=y0-ay[q];
+      if((u===2||u===-2)&&(w===2||w===-2)){
+        if(u===p0x&&w===p0y) run0++; else {p0x=u;p0y=w;run0=1;}
+      } else run0=0;
+      if(!hw0&&run0>=208){ hw0=s-run0-103; ever0=1; if(!first) first=hw0; }
+      else if(hw0&&run0===0){ destr++; hw0=0; }
+
+      u=x1-bx[q]; w=y1-by[q];
+      if((u===2||u===-2)&&(w===2||w===-2)){
+        if(u===p1x&&w===p1y) run1++; else {p1x=u;p1y=w;run1=1;}
+      } else run1=0;
+      if(!hw1&&run1>=208){ hw1=s-run1-103; ever1=1; if(!first) first=hw1; }
+      else if(hw1&&run1===0){ destr++; hw1=0; }
+
+      if(hw0&&hw1){ if(!bothAt) bothAt=s; } else bothAt=0;
+      if(bothAt&&s>bothAt+GRACE) break;
+    }
+  }
+  for(let j=0;j<t;j++) G[T[j]]=0;
+  return {first,bothEnd:(hw0>0&&hw1>0)?1:0,ever:(ever0||ever1)?1:0,
+          destr,lostEnd:((ever0&&!hw0)||(ever1&&!hw1))?1:0,
+          contact,bridge,edge,steps:s,dx,dy,r};
+}
+
+function runSingle(d0,CAP){
+  let t=0,x=C,y=C,d=d0,run=0,rx=0,ry=0;
+  for(let s=1;s<=CAP;s++){
+    const i=y*N+x;
+    if(!G[i]){ d=(d+1)&3; G[i]=1; } else { d=(d+3)&3; G[i]=0; }
+    T[t++]=i; x+=DX[d]; y+=DY[d];
+    if(x<3||y<3||x>N-4||y>N-4) break;
+    const k=s&255; ax[k]=x; ay[k]=y;
+    if(s>104){
+      const q=(s-104)&255, u=x-ax[q], w=y-ay[q];
+      if((u===2||u===-2)&&(w===2||w===-2)){
+        if(u===rx&&w===ry) run++; else {rx=u;ry=w;run=1;}
+      } else run=0;
+      if(run>=208){ const o=s-run-103;
+        for(let j=0;j<t;j++) G[T[j]]=0; return {onset:o,dx:rx,dy:ry}; }
+    }
+  }
+  for(let j=0;j<t;j++) G[T[j]]=0; return null;
+}
+
+function canon(dx,dy,r){
+  let best=null;
+  for(let k=0;k<4;k++){
+    let x=dx,y=dy;
+    for(let j=0;j<k;j++){ const nx=-y, ny=x; x=nx; y=ny; }
+    const s=x+','+y+','+r;
+    if(best===null||s<best) best=s;
+  }
+  return best;
+}
+
+g('run').onclick=()=>{
+  const per=+g('per').value, RNG=+g('rng').value, CAP=+g('cap').value, GRACE=5000;
+  g('run').disabled=true; g('csv').disabled=true;
+  g('verdict').className='dim'; g('verdict').textContent='running control…';
+
+  /* control */
+  const ctl=[0,1,2,3].map(d=>runSingle(d,CAP));
+  const base=ctl[0]?ctl[0].onset:NaN;
+  g('tc').tBodies[0].innerHTML=ctl.map((c,i)=>
+    `<tr><td>${HN[i]}</td><td>${c?f(c.onset):'none within cap'}</td>
+     <td>${c?`(${c.dx>0?'+':''}${c.dx}, ${-c.dy>0?'+':''}${-c.dy})`:'—'}</td>
+     <td class="${c&&c.onset===base?'ok':'warn'}">${c?(c.onset-base===0?'0 — identical':f(c.onset-base)):'—'}</td></tr>`
+  ).join('');
+  g('nc').innerHTML=`Baseline onset <b>${f(base)}</b> steps. The four headings are the same trajectory `+
+    `rotated, so identical onsets confirm determinism and validate the detector.`;
+
+  /* jobs */
+  const jobs=[];
+  CLS.forEach(cl=>{
+    const seen=new Set(); let guard=0;
+    while(seen.size<per && guard++<per*60){
+      const dx=((Math.random()*(2*RNG+1))|0)-RNG, dy=((Math.random()*(2*RNG+1))|0)-RNG;
+      if(dx===0&&dy===0) continue;
+      const k=canon(dx,dy,cl.r);
+      if(seen.has(k)) continue;
+      seen.add(k); jobs.push({dx,dy,r:cl.r});
+    }
+  });
+
+  const acc=CLS.map(()=>({n:0,ever:0,both:0,first:[],destrRuns:0,destr:[],lost:0,
+                          bridges:[],edge:0}));
+  let done=0; LAST=[];
+
+  const chunk=()=>{
+    const t0=performance.now();
+    while(done<jobs.length && performance.now()-t0<60){
+      const j=jobs[done], res=runPair(j.dx,j.dy,j.r,CAP,GRACE), a=acc[j.r];
+      a.n++; LAST.push(res);
+      if(res.ever) a.ever++;
+      if(res.bothEnd) a.both++;
+      if(res.first) a.first.push(res.first);
+      if(res.destr){ a.destrRuns++; a.destr.push(res.destr); }
+      if(res.lostEnd) a.lost++;
+      if(res.bridge) a.bridges.push(res.bridge);
+      if(res.edge) a.edge++;
+      done++;
+    }
+    g('prog').firstChild.style.width=(done/jobs.length*100)+'%';
+    g('verdict').textContent=`simulating ${done.toLocaleString()} / ${jobs.length.toLocaleString()} runs…`;
+    if(done<jobs.length){ requestAnimationFrame(chunk); return; }
+
+    const nAll=LAST.length;
+    const allFirst=srt(LAST.map(r=>r.first).filter(Boolean));
+    const allBridge=srt(LAST.map(r=>r.bridge).filter(Boolean));
+    const allDestr=LAST.filter(r=>r.destr).map(r=>r.destr);
+
+    /* table 1 — highway */
+    g('t1').tBodies[0].innerHTML=CLS.map(cl=>{
+      const a=acc[cl.r], v=srt(a.first);
+      return `<tr><td>${cl.key} · ${cl.name}</td><td>${a.n}</td>
+        <td class="ok">${pc(a.ever,a.n)}</td><td>${pc(a.both,a.n)}</td>
+        <td>${f(v[0])}</td><td>${f(med(a.first))}</td><td>${f(v[v.length-1])}</td></tr>`;
+    }).join('');
+    g('t1').tFoot.innerHTML=`<tr><td>pooled</td><td>${nAll}</td>
+      <td class="ok">${pc(LAST.filter(r=>r.ever).length,nAll)}</td>
+      <td>${pc(LAST.filter(r=>r.bothEnd).length,nAll)}</td>
+      <td>${f(allFirst[0])}</td><td>${f(med(allFirst))}</td>
+      <td>${f(allFirst[allFirst.length-1])}</td></tr>`;
+    g('n1').innerHTML=`"Runs with a highway" = at least one ant reached a verified 104-cycle at any point. `+
+      `"Both ants" = both held highways at the end of the run. Onset steps are for the first highway by `+
+      `either ant; single-ant baseline <b>${f(base)}</b>. Cap ${CAP.toLocaleString()} steps, so `+
+      `non-occurrence is censored rather than impossible.`;
+
+    /* table 2 — destruction */
+    g('t2').tBodies[0].innerHTML=CLS.map(cl=>{
+      const a=acc[cl.r], d=srt(a.destr);
+      return `<tr><td>${cl.key} · ${cl.name}</td>
+        <td class="${a.destrRuns?'bad':'dim'}">${pc(a.destrRuns,a.n)}</td>
+        <td>${f(med(a.destr))} · ${f(d[d.length-1])}</td>
+        <td>${pc(a.lost,a.n)}</td></tr>`;
+    }).join('');
+    g('t2').tFoot.innerHTML=`<tr><td>pooled</td>
+      <td class="bad">${pc(LAST.filter(r=>r.destr).length,nAll)}</td>
+      <td>${f(med(allDestr))} · ${f(srt(allDestr)[allDestr.length-1])}</td>
+      <td>${pc(LAST.filter(r=>r.lostEnd).length,nAll)}</td></tr>`;
+    g('n2').innerHTML=`Destruction = a verified 104-cycle lapsing, which can only be caused by the other `+
+      `ant's cells. A single ant can never register one, so any non-zero value here is purely an `+
+      `interaction effect. The final column counts runs ending with an ant that had a highway and lost it.`;
+
+    /* table 3 — bridges */
+    g('t3').tBodies[0].innerHTML=CLS.map(cl=>{
+      const a=acc[cl.r], v=srt(a.bridges);
+      return `<tr><td>${cl.key} · ${cl.name}</td>
+        <td class="${a.bridges.length?'ok':'dim'}">${a.bridges.length}</td>
+        <td>${pc(a.bridges.length,a.n)}</td>
+        <td>${f(v[0])}</td><td>${f(med(a.bridges))}</td><td>${f(v[v.length-1])}</td></tr>`;
+    }).join('');
+    g('t3').tFoot.innerHTML=`<tr><td>pooled</td>
+      <td class="${allBridge.length?'ok':'dim'}">${allBridge.length}</td>
+      <td>${pc(allBridge.length,nAll)}</td>
+      <td>${f(allBridge[0])}</td><td>${f(med(allBridge))}</td>
+      <td>${f(allBridge[allBridge.length-1])}</td></tr>`;
+    g('n3').innerHTML=`Bridge = an ant already in a verified highway cycle reaching a cell coloured by the `+
+      `other ant, leaving a corridor that joins the two structures. `+
+      (allBridge.length<Math.max(1,nAll*0.01)
+        ? `The near-zero rate is itself the finding: established highways essentially never meet by chance, because contact requires near-alignment.`
+        : `Bridges occurred often enough to warrant a geometric follow-up.`);
+
+    /* histogram */
+    if(allFirst.length){
+      const lo=allFirst[0], hi=allFirst[allFirst.length-1], B=26, w=(hi-lo)/B||1;
+      const bins=new Array(B).fill(0);
+      allFirst.forEach(v=>bins[Math.min(B-1,Math.floor((v-lo)/w))]++);
+      const mx=Math.max(...bins);
+      g('hist').textContent=bins.map((c,i)=>{
+        const e=Math.round(lo+i*w);
+        const mark=(base>=e&&base<e+w)?'  ◄ single-ant baseline':'';
+        return String(e).padStart(9)+' │'+'█'.repeat(Math.round(c/mx*50))+' '+c+mark;
+      }).join('\n');
+      g('hist').className='';
+    }
+
+    g('verdict').className='ok';
+    g('verdict').innerHTML=
+      `${nAll.toLocaleString()} distinct configurations · `+
+      `highway in <span class="ok">${pc(LAST.filter(r=>r.ever).length,nAll)}</span> of runs `+
+      `(earliest ${f(allFirst[0])} · median ${f(med(allFirst))} · latest ${f(allFirst[allFirst.length-1])}; baseline ${f(base)}) · `+
+      `destroyed in <span class="bad">${pc(LAST.filter(r=>r.destr).length,nAll)}</span> · `+
+      `bridges <span class="${allBridge.length?'ok':'dim'}">${allBridge.length}</span>`+
+      (allBridge.length?` (earliest ${f(allBridge[0])} · median ${f(med(allBridge))} · latest ${f(allBridge[allBridge.length-1])})`:'');
+    g('run').disabled=false; g('csv').disabled=false;
+  };
+  chunk();
+};
+
+g('csv').onclick=()=>{
+  if(!LAST.length){ alert('Run the batch study first.'); return; }
+  const head='class_r,dx,dy,highway_formed,first_highway_step,both_at_end,'+
+             'destructions,lost_at_end,bridge_step,steps,edge\n';
+  const rows=LAST.map(r=>[r.r,r.dx,r.dy,r.ever,r.first,r.bothEnd,
+    r.destr,r.lostEnd,r.bridge,r.steps,r.edge].join(',')).join('\n');
+  const url=URL.createObjectURL(new Blob([head+rows],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a');
+  a.href=url; a.download='two-ant-study.csv';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);},100);
+};
+})();
+</script>
+</body>
+</html>

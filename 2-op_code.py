@@ -4,7 +4,7 @@ import csv
 from python_tsp.heuristics import solve_tsp_local_search
 from python_tsp.distances import euclidean_distance_matrix
 
-with open("two_opt_results2.csv", "w", newline="") as f:
+with open("two_opt_results3.csv", "w", newline="") as f:
     writer = csv.writer(f)
     writer.writerow(["n", "seconds", "distance"])
     n = 2
@@ -31,7 +31,7 @@ with open("two_opt_results2.csv", "w", newline="") as f:
             print(f"Computation that took longer that 600 seconds (10minutes) has been found. ({n, distance})")
             break
         else:
-            n= n*2
+            n= n*n
             
 
 
